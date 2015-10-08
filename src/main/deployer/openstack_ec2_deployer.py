@@ -66,10 +66,6 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 from libcloud.security import VERIFY_SSL_CERT
 
-from paramiko.client import SSHClient, AutoAddPolicy
-from paramiko.ssh_exception import BadHostKeyException, AuthenticationException,\
-    SSHException
-
 import saga.job
 from saga.exceptions import NoSuccess, BadParameter, AuthenticationFailed
 from saga.filesystem import Directory, File
@@ -645,11 +641,10 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
                 time.sleep(2)
         
         LOG.debug('All resources terminated.')
-            
-                
-                
-            
 
+    # This abstraction previously allowed easy switching between the saga and
+    # paramiko implementations of this function. For now, the paramiko version
+    # has been removed to remove the dependency on paramiko.
     def _wait_for_node_accessbility(self, *args, **kwargs):
         return self._wait_for_node_accessbility_saga(*args, **kwargs)
 
@@ -719,69 +714,6 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
             LOG.debug('ERROR: Unable to connect to remote node...')
         else:
             LOG.debug('**** SAGA CONNECTION TO REMOTE NODE(S) SUCCESSFUL ****')
-        
-        return connection_successful
-
-    def _wait_for_node_accessbility_paramiko(self, node_ip_list, user_id, key_file, 
-                                    port=22, retries=3):
-        # Set up paramiko for access to the remote resources
-        ssh_client = SSHClient()
-        ssh_client.set_missing_host_key_policy(AutoAddPolicy())
-        ssh_params = {'port':port, 
-                      'username': user_id, 
-                      'key_filename': key_file, 
-                      'timeout': 5,
-                      'look_for_keys': False}
-    
-        retries = 3
-        attempts_made = 0
-        connection_successful = False
-    
-        while attempts_made < retries and not connection_successful:
-            nodes_ok = []
-            for ip in node_ip_list:
-                try:
-                    LOG.debug('Attempt <%s> to connect to remote resource '
-                              '<%s>...' % (attempts_made+1, ip))
-                    ssh_params['hostname'] = ip
-                    LOG.debug('Connecting to remote node...')
-                    ssh_client.connect(**ssh_params)
-                    LOG.debug('Connected to remote node...')
-                    ssh_client.close()
-                    LOG.debug('Closed connection to remote node...')
-                    nodes_ok.append(ip)
-                except socket.timeout:
-                    LOG.debug('Timed out trying to connect to <%s>...'
-                              % ip)
-                except BadHostKeyException as e:
-                    LOG.debug('Bad host key error connecting to resource <%s>: '
-                              ' %s' % (ip, str(e)))
-                except AuthenticationException as e:
-                    LOG.debug('Authentication error connecting to resource '
-                              '<%s>: %s' % (ip, str(e)))
-                except SSHException as e:
-                    LOG.debug('SSH error connecting to resource <%s>: %s'
-                              % (ip, str(e)))
-                except socket.error as e:
-                    LOG.debug('Error making connection to resource <%s>: %s'
-                              % (ip, str(e)))
-            
-            node_ip_list = [item for item in node_ip_list if item not in nodes_ok]
-            # if node list is empty and all nodes are running set flag to true
-            if not node_ip_list:
-                connection_successful = True
-            attempts_made += 1
-            
-            if not connection_successful and attempts_made < retries: 
-                wait_time = 10*attempts_made
-                LOG.debug('Waiting <%s> seconds before retrying connection...' 
-                          % wait_time)
-                time.sleep(wait_time)
-        
-        if not connection_successful:
-            LOG.debug('ERROR: Unable to connect to remote node...')
-        else:
-            LOG.debug('**** PARAMIKO CONNECTION TO REMOTE NODE(S) SUCCESSFUL ****')
         
         return connection_successful
     
