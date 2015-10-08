@@ -11,7 +11,7 @@ setup(
     package_data={'':['*.yaml']},
     dependency_links=['git+https://github.com/jcohen02/saga-python#egg=saga-python',
                       'git+https://github.com/saga-project/radical.utils#egg=radical.utils'],
-    install_requires=['saga-python','radical.utils','apache-libcloud==0.14.0'],
+    install_requires=['saga-python','radical.utils','apache-libcloud==0.14.0','PyYAML'],
     # Console scripts to be generated
     entry_points={
         'console_scripts': [

@@ -47,6 +47,7 @@ This library currently has the following third-party dependencies (which will be
  * saga-python - [http://radical-cybertools.github.io/saga-python/](http://radical-cybertools.github.io/saga-python/)
  * radical.utils - [http://radicalutils.readthedocs.org](http://radicalutils.readthedocs.org)
  * Apache Libcloud - [https://libcloud.apache.org](https://libcloud.apache.org)
+ * PyYAML - [http://pyyaml.org/wiki/PyYAML](http://pyyaml.org/wiki/PyYAML)
 
 _NOTE: At present, this library uses modifications to saga-python that have not yet been integrated into the main library distribution. As a result, the installer will clone saga-python from a third-party github repository containing these modifications._
 
