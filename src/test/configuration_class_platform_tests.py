@@ -40,32 +40,41 @@
 #      and Sustainability of HPC Software (EP/K038788/1).
 # 
 #  -----------------------------------------------------------------------------
-
 '''
 Created on 28 Jul 2015
 
 @author: jcohen02
 '''
 import unittest
+from mock.mock import Mock
 
-from deployer.config import get_config_class
-from deployer.config.openstack import OpenStackPlatformConfig
-from deployer.config.pbs import PBSProPlatformConfig
+from deployer.config.platform.base import DeployerConfigManager
+from deployer.config.platform.openstack import OpenStackPlatformConfig
+from deployer.config.platform.pbs import PBSProPlatformConfig
 
-class OpenStackConfigClassTestCase(unittest.TestCase):
+class GetValidPlatformConfigClassTestCase(unittest.TestCase):
 
     # Check that we're prevented from creating an instance of this class 
     # directly via its constructor. It is necessary to use get_instance 
-    def test_get_openstack_config_class(self):
-        c = get_config_class('openstack')
-        self.assertEqual(type(c), type(OpenStackPlatformConfig))
+    def test_get_platform_configuration_valid(self):
+        mock_config_class = Mock(spec=OpenStackPlatformConfig)
         
-class PBSConfigClassTestCase(unittest.TestCase):
-    # Check that we're prevented from creating an instance of this class 
-    # directly via its constructor. It is necessary to use get_instance 
+        dcm = DeployerConfigManager.get_instance()
+        # Inject the mocked platform config, with the correct key, into the 
+        # config manager's list of platforms.
+        dcm._software['openstack'] = mock_config_class
+        c = dcm.get_platform_configuration('openstack')
+        self.assertTrue(isinstance(c, OpenStackPlatformConfig))
+        
+class GetInvalidPlatformConfigClassTestCase(unittest.TestCase):
+     
     def test_get_pbs_config_class(self):
-        c = get_config_class('pbspro')
-        self.assertEqual(type(c), type(PBSProPlatformConfig))
+        mock_config_class = Mock(spec=PBSProPlatformConfig)
+        
+        dcm = DeployerConfigManager.get_instance()
+        dcm._software['pbspro'] = mock_config_class
+        
+        self.assertRaises(ValueError, dcm.get_platform_configuration,'openstack')
 
 if __name__ == "__main__":
     unittest.main()

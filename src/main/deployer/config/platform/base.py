@@ -71,7 +71,7 @@ class DeployerConfigManager(object):
     this file.
     '''
     _instance = None
-    _software = {}
+    _platforms = {}
     
     # This class follows a singleton pattern, we override __new__ and throw an
     # exception if someone tries to create a class this way. 
@@ -103,7 +103,7 @@ class DeployerConfigManager(object):
             LOG.debug('Config loaded for file <%s>: %s' % (cf, conf))
             parsed_config = self.read_platform_config(conf)
             
-            self._software[parsed_config.platform_id] = parsed_config
+            self._platforms[parsed_config.platform_id] = parsed_config
         
         for cf in config_files:
             LOG.debug('Handling config file <%s>' % cf)
@@ -112,7 +112,7 @@ class DeployerConfigManager(object):
             LOG.debug('Config loaded for file <%s>: %s' % (cf, conf))
             parsed_config = self.read_platform_config(conf)
             
-            self._software[parsed_config.platform_id] = parsed_config
+            self._platforms[parsed_config.platform_id] = parsed_config
         
         platform_names = self.get_platform_names()
         platform_list = ''
@@ -204,17 +204,17 @@ class DeployerConfigManager(object):
         for f in files:
             pc = self.load_platform_config(f)
             conf_obj = self.read_platform_config(pc)
-            self._software[conf_obj.name] = conf_obj
+            self._platforms[conf_obj.name] = conf_obj
     
     def get_platform_names(self):
-        return self._software.keys()
+        return self._platforms.keys()
     
     def get_platform_configuration(self, name):
         try:
-            return self._software[name]
+            return self._platforms[name]
         except KeyError:
             raise ValueError('A platform with the ID <%s> is not registered '
-                             'with this configuration manager.')
+                             'with this configuration manager.' % name)
 
     
     def _get_config_properties(self, config_class):

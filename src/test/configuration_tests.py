@@ -79,13 +79,5 @@ class DeployerConfigGetSingletonInstanceTwiceTestCase(unittest.TestCase):
         self.assertEqual(i, i2, msg="Both DeployerConfigManager instances \
                          are the same")
 
-class FindConfigFilesTestCase(unittest.TestCase):
-    
-    #@mock.patch(deployer.config.base.pkg_resources)
-    #def test_find_config_files(self, mock_res_listdir):
-    #    inst = DeployerConfigManager.get_instance()
-    #    files = inst._get_platform_config_files()
-    pass        
-
 if __name__ == "__main__":
     unittest.main()
