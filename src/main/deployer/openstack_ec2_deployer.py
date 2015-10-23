@@ -553,6 +553,15 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         input_files = getattr(self, 'transferred_input_files', [])
         job_arguments += input_files
         
+        # Check if we have a JOB_ID variable in the arguments or input files.
+        # If so, replace this variable with the actual job ID.
+        job_arguments_tmp = job_arguments
+        job_arguments = []
+        for item in job_arguments_tmp:
+            job_arguments.append(item.replace('$JOB_ID', self.job_config.job_id))
+        
+        LOG.debug('Modified job arguments: %s' % job_arguments)
+        
         jd = saga.job.Description()
         jd.environment = getattr(self.job_config, 'environment', {})
         if self.job_config.num_processes > 1:
@@ -651,7 +660,8 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
     def _wait_for_node_accessbility_saga(self, node_ip_list, user_id, key_file, 
                                     port=22, retries=3):
         # Using saga to check if remote resources are accessible
-        retries = 3
+        #retries = 3
+        retries = 5
         attempts_made = 0
         connection_successful = False
         

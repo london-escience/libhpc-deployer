@@ -68,9 +68,9 @@ class JobConfiguration(object):
 
     _job_id = None
     _executable = None
-    _args = []
     _node_type = None
     _input_files = []
+    _args = []
     _num_processes = 1
     _processes_per_node = 1
     _working_dir = None
@@ -99,15 +99,7 @@ class JobConfiguration(object):
     @executable.setter
     def executable(self, value):
         self._executable = value
-        
-    @property
-    def args(self):
-        return self._args
-    
-    @args.setter
-    def args(self, value):
-        self._args = value
-    
+            
     @property
     def input_files(self):
         return self._input_files
@@ -115,6 +107,14 @@ class JobConfiguration(object):
     @input_files.setter
     def input_files(self, value_list):
         self._input_files = value_list
+
+    @property
+    def args(self):
+        return self._args
+    
+    @args.setter
+    def args(self, value):
+        self._args = value
     
     @property
     def node_type(self):
@@ -173,13 +173,14 @@ class JobConfiguration(object):
         self._output_file_destination = value
     
     def get_info(self):
-        conf_str = ('\nJob ID:\t\t\t\t%s\nInput files:\t\t\t%s\n'
-                    'Working directory:\t\t%s\n'
+        conf_str = ('\nJob ID:\t\t\t\t%s\nInput files:\t\t\t%s\nArguments:'
+                    '\t\t\t%s\nWorking directory:\t\t%s\n'
                     'Output file destination:\t%s\n\nNode type:\t\t\t%s\n'
                     'Number of processes:\t\t%s\nProcesses per node:\t\t%s\n' 
-                    % (self._job_id, self._input_files, self._working_dir, 
-                       self._output_file_destination, self._node_type, 
-                       self._num_processes, self._processes_per_node))
+                    % (self._job_id, self._input_files, self.args, 
+                       self._working_dir, self._output_file_destination,  
+                       self._node_type, self._num_processes,
+                       self._processes_per_node))
         return conf_str
     
     def print_info(self):
