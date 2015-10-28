@@ -81,7 +81,7 @@ class DeployerConfigManager(object):
                         ' to access the single instance of this class.')
 
     def __init__(self):
-        print 'Creating %s class instance...in init...' % __name__
+        LOG.debug('Creating %s class instance...in init...' % __name__)
     
     @classmethod
     def get_instance(cls):

@@ -51,6 +51,8 @@ from deployer.config.job import JobConfiguration
 from deployer.exceptions import JobConfigurationError
 from deployer.deployment_factory import JobDeploymentFactory
 from os.path import expanduser
+from deployer.openstack_ec2_deployer import JobDeploymentEC2Openstack
+from deployer.ec2_deployer import JobDeploymentEC2
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG,
@@ -97,10 +99,14 @@ def libhpc_run_job():
                             help="The software ID or full path to a YAML file "
                             "representing the software to deploy on the "
                             "specified platform.")
+    run_parser.add_argument('-i', type=str, required=False, dest="ip_file",
+                            help="The full path for a file that should have "
+                            "IP addresses of the started cloud nodes written "
+                            "to it once the nodes are started and accessible.")
     
     args = parser.parse_args()
     
-    print 'Args: ' + str(args)
+    LOG.debug('Args: %s' % str(args))
     
     ldt = LibhpcDeployerTool()
     
@@ -180,8 +186,14 @@ def libhpc_run_job():
             software_config = args.software_to_deploy
             LOG.debug('We have a software config specified: <%s>' 
                       % software_config)
+        
+        # Check if an ip file was specified
+        ip_file = None
+        if args.ip_file:
+            ip_file = args.ip_file
+            LOG.debug('We have an ip_file specified: <%s>' % ip_file)
 
-        ldt.run_job(platform_config, job_config, software_config)
+        ldt.run_job(platform_config, job_config, software_config, ip_file)
     else:
         parser.print_help()
         LOG.debug('No expected values were present in the parsed input '
@@ -213,7 +225,8 @@ class LibhpcDeployerTool(object):
         else:
             LOG.debug('Unexpected config type <%s> received.', config_type)
             
-    def run_job(self, platform_config_name, job_config, software_config=None):
+    def run_job(self, platform_config_name, job_config, software_config=None,
+                ip_file=None):
         LOG.debug('Received a request to run a job with the platform config '
                   '<%s> and job specification <%s>.' 
                   % (platform_config_name, job_config.__dict__))
@@ -256,6 +269,14 @@ class LibhpcDeployerTool(object):
                                                job_id=job_config.job_id,
                                                software_config=software_config)
         
+        # If an ip file was specified, write the public IPs of the resources
+        # to this file. Currently only supports EC2-style cloud platforms
+        if ip_file and (isinstance(d, JobDeploymentEC2Openstack) or
+                        isinstance(d, JobDeploymentEC2)):
+            with open(ip_file, 'w') as f:
+                for node in resource_info:
+                    f.write(node[0].public_ips[0] + '\n')
+                
         try:
             if software_config:
                 d.deploy_software(software_config)
@@ -278,6 +299,10 @@ class LibhpcDeployerTool(object):
                 LOG.debug('We have node info so there may be nodes to shut '
                           'down...')
             d.shutdown_resources()
+        
+        # If an IP file was created, delete it
+        if ip_file and os.path.exists(ip_file):
+            os.remove(ip_file)
             
 if __name__ == '__main__':
     libhpc_run_job()
