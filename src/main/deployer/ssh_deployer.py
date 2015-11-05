@@ -82,18 +82,21 @@ class JobDeploymentSSH(JobDeploymentBase):
         # Here we set up the basic platform configuration properties so that
         # we can access the target resource via SSH
         self.host = self.platform_config.platform_service_host
-        self.port = 22
+        if self.platform_config.platform_service_port:
+            self.port = self.platform_config.platform_service_port
+        else:
+            self.port = 22
         
         # Now we set up a SAGA-Python session to handle file transfer
         ctx = saga.Context("ssh")
         ctx.user_id = self.platform_config.user_id
-        ctx.user_key = self.platform_config.key_file
+        ctx.user_key = self.platform_config.user_key_file
 
         # Session is pre-created by superclass
         self.session.add_context(ctx)
         
     def initialise_resources(self, *args, **kwargs):
-        JobDeploymentBase.initialise_resources(self, args, kwargs)
+        JobDeploymentBase.initialise_resources(self)
         LOG.debug('SSH Deployer: Initialise resources - Nothing to do here...')
         
         return None
@@ -117,8 +120,10 @@ class JobDeploymentSSH(JobDeploymentBase):
         # Check that the job storage directory exists and then create a 
         # sub-directory specifically for this job.
         try:
-            directory = Directory('sftp://%s%s' % (self.host, job_dir),
-                                  session=self.session)
+            LOG.debug('URL for file transfer: <sftp://%s:%s%s>' 
+                      % (self.host, self.port, job_dir))
+            directory = Directory('sftp://%s:%s%s' % (self.host, self.port, 
+                                  job_dir), session=self.session)
         except saga.BadParameter as e:
             LOG.error('The specified job directory does not exist on resource '
                       '<%s> (%s).' % (self.host, str(e)))
@@ -168,6 +173,15 @@ class JobDeploymentSSH(JobDeploymentBase):
         job_arguments = getattr(self.job_config, 'args', [])
         input_files = getattr(self, 'transferred_input_files', [])
         job_arguments += input_files
+        
+        # Check if we have a JOB_ID variable in the arguments or input files.
+        # If so, replace this variable with the actual job ID.
+        job_arguments_tmp = job_arguments
+        job_arguments = []
+        for item in job_arguments_tmp:
+            job_arguments.append(item.replace('$JOB_ID', self.job_config.job_id))
+        
+        LOG.debug('Modified job arguments: %s' % job_arguments)
         
         jd = saga.job.Description()
         jd.environment = getattr(self.job_config, 'environment', {})
