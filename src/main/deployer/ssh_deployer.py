@@ -205,10 +205,22 @@ class JobDeploymentSSH(JobDeploymentBase):
         LOG.debug('SSH Deployer: Waiting for job completion...')
         self.job.wait()
         LOG.debug('SSH Deployer: Job has finished...')
+        return (None, None)
 
     def collect_output(self, destination):
+        # We're using the default implementation of the file transfer code
+        # This doesn't take into account a different port for the remote host
+        # connection. To work around this, we temporarily set the host property
+        # to include the port and the revert to the original value after the
+        # file transfer is complete.
+        host_tmp = self.host
+        self.host = ('%s:%s' % (self.host, self.port)) 
+        
         # Using the base implementation of job output file collection...
         JobDeploymentBase.collect_output(self, destination)
+        
+        # Set the host value back to its original value
+        self.host = host_tmp
         
     def shutdown_resources(self):
         JobDeploymentBase.shutdown_resources(self)
