@@ -45,7 +45,7 @@ import os
 import logging
 import argparse
 
-from deployer.config.platform.base import DeployerConfigManager
+from deployer.config.platform.base import DeployerConfigManager, PlatformConfig
 from deployer.config.software.base import SoftwareConfigManager
 from deployer.config.job import JobConfiguration
 from deployer.exceptions import JobConfigurationError
@@ -131,9 +131,9 @@ def libhpc_run_job():
         try:
             platform = args.platform
             if os.path.isfile(platform):
-                raise NotImplementedError('Support for using a YAML file '
-                    'describing the platform to use for running a job is not '
-                    'yet implemented. Please use a platform ID instead.')
+                # raise NotImplementedError('Support for using a YAML file '
+                #    'describing the platform to use for running a job is not '
+                #    'yet implemented. Please use a platform ID instead.')
                 # Check if the specified job spec parameter is a YAML file that
                 # we can open.
                 #try:
@@ -142,6 +142,9 @@ def libhpc_run_job():
                 #    LOG.debug('Unable to read the YAML configuration from '
                 #              'the specified YAML file <%s>: %s' 
                 #              % (jobspec, str(e)))
+                dcm = DeployerConfigManager.get_instance()
+                conf = dcm.load_platform_config(platform, resource=False)
+                platform_config = dcm.read_platform_config(conf)
             elif platform in ldt.dcm.get_platform_names():
                 LOG.debug('We have a platform configuration ID <%s> to '
                           'identify the platform to use for running this task.'
@@ -225,11 +228,11 @@ class LibhpcDeployerTool(object):
         else:
             LOG.debug('Unexpected config type <%s> received.', config_type)
             
-    def run_job(self, platform_config_name, job_config, software_config=None,
+    def run_job(self, platform_config_input, job_config, software_config=None,
                 ip_file=None):
         LOG.debug('Received a request to run a job with the platform config '
                   '<%s> and job specification <%s>.' 
-                  % (platform_config_name, job_config.__dict__))
+                  % (platform_config_input, job_config.__dict__))
         if software_config:
             LOG.debug('A software config has also been specified: <%s>' 
                       % (software_config))
@@ -237,9 +240,15 @@ class LibhpcDeployerTool(object):
         # Create a deployment factory and get a deployer for the specified job
         # configuration
         deployment_factory = JobDeploymentFactory()
-        d = deployment_factory.get_deployer(platform_config_name)
+        d = deployment_factory.get_deployer(platform_config_input)
         
-        platform_config = d.get_platform_configuration()
+        if isinstance(platform_config_input, PlatformConfig):
+            LOG.debug('We\'ve been provided with a pre-instantiated platform config')
+            platform_config = platform_config_input
+        else:
+            LOG.debug('Provided with platform config name. '
+                      'Getting platform config from deployer.')
+            platform_config = d.get_platform_configuration()
         
         job_id = job_config.job_id
         
