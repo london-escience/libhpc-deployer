@@ -79,6 +79,9 @@ class JobConfiguration(object):
     
     # Where to copy the output files to.
     _output_file_destination = None
+    
+    # Whether to delete job data on the execution node after a job has finished
+    _delete_job_files = False
 
     def __init__(self):
         '''
@@ -175,16 +178,25 @@ class JobConfiguration(object):
     @output_file_destination.setter
     def output_file_destination(self, value):
         self._output_file_destination = value
+        
+    @property
+    def delete_job_files(self):
+        return self._delete_job_files
+    
+    @delete_job_files.setter
+    def delete_job_files(self, value):
+        self._delete_job_files = value
     
     def get_info(self):
         conf_str = ('\nJob ID:\t\t\t\t%s\nInput files:\t\t\t%s\nArguments:'
                     '\t\t\t%s\nWorking directory:\t\t%s\n'
                     'Output file destination:\t%s\n\nNode type:\t\t\t%s\n'
-                    'Number of processes:\t\t%s\nProcesses per node:\t\t%s\n' 
+                    'Number of processes:\t\t%s\nProcesses per node:\t\t%s\n'
+                    'Delete job files:\t\t%s\n' 
                     % (self._job_id, self._input_files, self.args, 
                        self._working_dir, self._output_file_destination,  
                        self._node_type, self._num_processes,
-                       self._processes_per_node))
+                       self._processes_per_node, self._delete_job_files))
         return conf_str
     
     def print_info(self):

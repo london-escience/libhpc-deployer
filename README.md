@@ -420,6 +420,8 @@ The root of a job specification is the `libhpc_jobspec:` key. This key can take 
 
  * `output_file_destination:`: The directory on the local machine to store the output data to. This can be '.' for the current directory or a relative path.
 
+ * `delete_job_files:`: Delete the job directory on the remote execution node, including all a job's files, once a job has completed and the output files have been returned to the caller. This value can be `True` or `False`. If not specified, the default is `False`. *NOTE: This feature is currently implemented only for the SSH_FORK platform type.*
+
 For cloud platforms, the following additional values may be specified:
 
  * `node_type:`: The string identifier for the node type to use, e.g. 'm1.large', 't1.micro', etc..

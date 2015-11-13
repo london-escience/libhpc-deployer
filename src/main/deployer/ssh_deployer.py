@@ -56,7 +56,7 @@ import saga.job
 from deployer.deployment_interface import JobDeploymentBase
 from deployer.exceptions import JobError
 
-from saga.filesystem import Directory, File
+from saga.filesystem import Directory, File, RECURSIVE
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG,
@@ -219,6 +219,33 @@ class JobDeploymentSSH(JobDeploymentBase):
         # Using the base implementation of job output file collection...
         JobDeploymentBase.collect_output(self, destination)
         
+        # If job_config delete_job_files is True, we can now delete the job
+        # files on the remote platform
+        if self.job_config.delete_job_files:
+            jobs_dir = self.platform_config.storage_job_directory
+            # Check that the job storage directory exists and then create a 
+            # sub-directory specifically for this job.
+            try:
+                LOG.debug('URL for file job directory: sftp://%s%s' 
+                          % (self.host, jobs_dir))
+                directory = Directory('sftp://%s%s' % (self.host, jobs_dir), 
+                                      session=self.session)
+            except saga.BadParameter as e:
+                LOG.error('The specified job directory does not exist on '
+                          'resource <%s> (%s).' % (self.host, str(e)))
+                raise JobError('The specified job directory does not exist '
+                               'on resource <%s> (%s)' % (self.host, str(e)))
+            try:
+                LOG.debug('Deleting job directory after job completion '
+                          '<sftp://%s%s/%s>' % (self.host, jobs_dir, 
+                                                self.job_config.job_id))
+                directory.remove(self.job_config.job_id, RECURSIVE)
+            except saga.NoSuccess as e:
+                LOG.error('The specified job data directory couldn\'t be '
+                          'removed <%s> (%s).' % (self.job_config.job_id, str(e)))
+                raise JobError('The specified job data directory couldn\'t be '
+                               'removed <%s> (%s)' % (self.job_config.job_id, str(e)))
+
         # Set the host value back to its original value
         self.host = host_tmp
         

@@ -360,7 +360,7 @@ class PlatformConfig(object):
                     'Port:\t\t%s\nJob directory:\t\t%s' 
                     % (self._platform_type, self._platform_id, self._platform_name, 
                        self._platform_host, self._platform_port,
-                       self._job_directory))
+                       self._storage_job_directory))
         return conf_str
     
     def print_info(self):
