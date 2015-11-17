@@ -512,6 +512,14 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         # Now upload the file(s) to the job data directory
         # and create an input file list containing the resulting locations
         # of the files.
+        # There are some cases where jobs may not have input files (they may, 
+        # for example pull the input files from a remote location as part of 
+        # the job process) so we first check whether there are any input files
+        # to process, if not, then return from this function
+        if not self.job_config.input_files:
+            LOG.debug('There are no input files to transfer for this job...')
+            return
+        
         self.transferred_input_files = []
         for f in self.job_config.input_files:
             try:
