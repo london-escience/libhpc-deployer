@@ -49,6 +49,9 @@ Created on 6 Aug 2015
 Exceptions used in the deployer library
 '''
 
+class ConnectionError(Exception):
+    pass
+
 class DeployerError(Exception):
     pass
 

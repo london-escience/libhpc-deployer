@@ -54,7 +54,7 @@ import os
 import saga.job
 
 from deployer.deployment_interface import JobDeploymentBase
-from deployer.exceptions import JobError
+from deployer.exceptions import JobError, ConnectionError
 
 from saga.filesystem import Directory, File, RECURSIVE
 
@@ -125,8 +125,11 @@ class JobDeploymentSSH(JobDeploymentBase):
             directory = Directory('sftp://%s:%s%s' % (self.host, self.port, 
                                   job_dir), session=self.session)
         except saga.BadParameter as e:
-            LOG.error('The specified job directory does not exist on resource '
-                      '<%s> (%s).' % (self.host, str(e)))
+            LOG.error('Error setting up connection to resource directory.')
+            if 'connection refused' in str(e).lower():
+                raise ConnectionError('Unable to connect to remote resource '
+                                      'to set up connection to directory.')
+                   
             raise JobError('The specified job directory does not exist '
                            'on resource <%s> (%s)' % (self.host, str(e)))
         try:

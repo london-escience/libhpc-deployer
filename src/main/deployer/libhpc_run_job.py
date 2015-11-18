@@ -40,15 +40,25 @@
 #      and Sustainability of HPC Software (EP/K038788/1).
 # 
 #  -----------------------------------------------------------------------------
+'''
+This tool provides the command line interface to the deployer. It can exit 
+with a number of different exit codes identifying different situations:
 
+  0  - Tool ran and completed successfully
+  10 - Connection error - unable to connect to remote resource via SSH
+  11 - Job directory error - the base job directory is not present on the remote
+       platform.
+  12 - Job error - the job started but failed for some reason 
+'''
 import os
+import sys
 import logging
 import argparse
 
 from deployer.config.platform.base import DeployerConfigManager, PlatformConfig
 from deployer.config.software.base import SoftwareConfigManager
 from deployer.config.job import JobConfiguration
-from deployer.exceptions import JobConfigurationError
+from deployer.exceptions import JobConfigurationError, ConnectionError
 from deployer.deployment_factory import JobDeploymentFactory
 from os.path import expanduser
 from deployer.openstack_ec2_deployer import JobDeploymentEC2Openstack
@@ -302,16 +312,24 @@ class LibhpcDeployerTool(object):
             d.collect_output(job_config.output_file_destination)
             
             d.shutdown_resources()
+        except ConnectionError as e:
+            LOG.error('Connection error when trying to run job: <%s>' % str(e))
+            sys.exit(10)
         except Exception as e:
-            LOG.debug('Error running the job: <%s>' % str(e))
+            LOG.debug('Unknown error running the job: <%s>' % str(e))
             if resource_info:
                 LOG.debug('We have node info so there may be nodes to shut '
                           'down...')
+            
+        # Finally block will still be run even though sys.exit is called above
+        # https://docs.python.org/2/library/sys.html#sys.exit
+        finally:
+            # If an IP file was created, delete it
+            if ip_file and os.path.exists(ip_file):
+                os.remove(ip_file)
+
             d.shutdown_resources()
         
-        # If an IP file was created, delete it
-        if ip_file and os.path.exists(ip_file):
-            os.remove(ip_file)
             
 if __name__ == '__main__':
     libhpc_run_job()
