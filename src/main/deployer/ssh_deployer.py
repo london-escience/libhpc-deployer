@@ -54,7 +54,8 @@ import os
 import saga.job
 
 from deployer.deployment_interface import JobDeploymentBase
-from deployer.exceptions import JobError, ConnectionError
+from deployer.exceptions import JobError, ConnectionError, DirectoryExistsError,\
+    StorageDirectoryNotFoundError
 
 from saga.filesystem import Directory, File, RECURSIVE
 
@@ -130,8 +131,9 @@ class JobDeploymentSSH(JobDeploymentBase):
                 raise ConnectionError('Unable to connect to remote resource '
                                       'to set up connection to directory.')
                    
-            raise JobError('The specified job directory does not exist '
-                           'on resource <%s> (%s)' % (self.host, str(e)))
+            raise StorageDirectoryNotFoundError('The specified job data base '
+                    'directory does not exist on resource <%s> (%s)'
+                    % (self.host, str(e)))
         try:
             # directory.make_dir() does not return a handle to the new directory
             # so need to create the directory URL manually.
@@ -140,8 +142,8 @@ class JobDeploymentSSH(JobDeploymentBase):
         except saga.NoSuccess as e:
             LOG.error('The specified job data directory already exists on '
                       'resource <%s> (%s).' % (self.host, str(e)))
-            raise JobError('The specified job directory already exists on '
-                           'on resource <%s> (%s)' % (self.host, str(e)))
+            raise DirectoryExistsError('The specified job directory already '
+                           'exists on resource <%s> (%s)' % (self.host, str(e)))
         
         # Now upload the file(s) to the job data directory
         # and create an input file list containing the resulting locations

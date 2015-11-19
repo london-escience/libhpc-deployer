@@ -45,10 +45,13 @@ This tool provides the command line interface to the deployer. It can exit
 with a number of different exit codes identifying different situations:
 
   0  - Tool ran and completed successfully
+  
   10 - Connection error - unable to connect to remote resource via SSH
-  11 - Job directory error - the base job directory is not present on the remote
-       platform.
-  12 - Job error - the job started but failed for some reason 
+  11 - Job storage directory not found error - the base job storage directory 
+       is not present on the remote platform.
+  12 - Job directory already exists error - A directory for the uniquely named 
+       job, that is about to be run, already exists.  
+  100 - Job error - the job started but failed for some reason 
 '''
 import os
 import sys
@@ -58,7 +61,8 @@ import argparse
 from deployer.config.platform.base import DeployerConfigManager, PlatformConfig
 from deployer.config.software.base import SoftwareConfigManager
 from deployer.config.job import JobConfiguration
-from deployer.exceptions import JobConfigurationError, ConnectionError
+from deployer.exceptions import JobConfigurationError, ConnectionError,\
+    StorageDirectoryNotFoundError, DirectoryExistsError
 from deployer.deployment_factory import JobDeploymentFactory
 from os.path import expanduser
 from deployer.openstack_ec2_deployer import JobDeploymentEC2Openstack
@@ -315,11 +319,19 @@ class LibhpcDeployerTool(object):
         except ConnectionError as e:
             LOG.error('Connection error when trying to run job: <%s>' % str(e))
             sys.exit(10)
+        except StorageDirectoryNotFoundError as e:
+            LOG.error('The job storage directory specified for the remote '
+                      'compute platform does not exist.')
+            sys.exit(11)
+        except DirectoryExistsError as e:
+            LOG.error('The job directory for this job already exists.')
+            sys.exit(12)  
         except Exception as e:
-            LOG.debug('Unknown error running the job: <%s>' % str(e))
+            LOG.error('Unknown error running the job: <%s>' % str(e))
             if resource_info:
                 LOG.debug('We have node info so there may be nodes to shut '
                           'down...')
+            sys.exit(100)
             
         # Finally block will still be run even though sys.exit is called above
         # https://docs.python.org/2/library/sys.html#sys.exit
