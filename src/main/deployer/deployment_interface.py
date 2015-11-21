@@ -106,18 +106,23 @@ class JobDeploymentBase(object):
         pass
     
     def initialise_resources(self):
+        # Moved the check for a job config down to the transfer files stage 
+        # when running with multiple jobs, the job configuration for each job
+        # is set on the deployer just before the transfer files stage.
+        # NOTE: Its therefore not possible to use the job config at this
+        # lifecycle stage since it may not have been set yet. 
+        pass
+    
+    def deploy_software(self):
+        pass
+    
+    def transfer_files(self):
         # Check that a job configuration has been provided, we can't proceed 
         # with the job if there is no configuration
         if self.job_config == None:
             raise ResourceInitialisationError('ERROR: No job configuration has '
                     'been provided. Register your job configuration using '
                     'set_job_config() before beginning the job lifecycle.')
-    
-    def deploy_software(self):
-        pass
-    
-    def transfer_files(self):
-        pass
     
     def run_job(self, job_details=None):
         if not self.job_config:
