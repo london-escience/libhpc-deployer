@@ -179,7 +179,9 @@ class JobDeploymentSSH(JobDeploymentBase):
         job_arguments_tmp = job_arguments
         job_arguments = []
         for item in job_arguments_tmp:
-            job_arguments.append(item.replace('$JOB_ID', self.job_config.job_id))
+            # Can't do a replace on items that are not string types!
+            if isinstance(item, basestring):
+                job_arguments.append(item.replace('$JOB_ID', self.job_config.job_id))
         
         LOG.debug('Modified job arguments: %s' % job_arguments)
         
