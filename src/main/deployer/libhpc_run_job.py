@@ -350,6 +350,9 @@ class LibhpcDeployerTool(object):
         # we can iterate over the job specifications running each job on 
         # the configured resource(s)
         for job_config in job_configs:
+            LOG.debug('Processing job <%s> from list of job configs.' 
+                      % job_config.job_id)
+            
             job_id = job_config.job_id
         
             if not job_config.working_dir:
