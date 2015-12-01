@@ -315,7 +315,7 @@ class LibhpcDeployerTool(object):
             
             d.collect_output(job_config.output_file_destination)
             
-            d.shutdown_resources()
+            #d.shutdown_resources()
         except ConnectionError as e:
             LOG.error('Connection error when trying to run job: <%s>' % str(e))
             sys.exit(10)
