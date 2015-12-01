@@ -569,6 +569,8 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
             # Can't do a replace on items that are not string types!
             if isinstance(item, basestring):
                 job_arguments.append(item.replace('$JOB_ID', self.job_config.job_id))
+            else:
+                job_arguments.append(item)
         
         LOG.debug('Modified job arguments: %s' % job_arguments)
         
