@@ -224,7 +224,15 @@ def libhpc_run_job():
             ip_file = args.ip_file
             LOG.debug('We have an ip_file specified: <%s>' % ip_file)
 
-        ldt.run_job(platform_config, job_spec_list, software_config, ip_file)
+        # Check if we need to write job_done files
+        done_files_dir = None
+        if args.done_files_dir:
+            done_files_dir = args.done_files_dir
+            LOG.debug('We have a "done_files" directory specified: <%s>'
+                      % done_files_dir)
+
+        ldt.run_job(platform_config, job_spec_list, software_config, 
+                    ip_file, done_files_dir)
     else:
         parser.print_help()
         LOG.debug('No expected values were present in the parsed input '
@@ -257,13 +265,19 @@ class LibhpcDeployerTool(object):
             LOG.debug('Unexpected config type <%s> received.', config_type)
             
     def run_job(self, platform_config_input, job_configs, software_config=None,
-                ip_file=None):
+                ip_file=None, done_files_dir=None):
         LOG.debug('Received a request to run <%s> job(s) with the platform '
                   'config <%s>.' 
                   % (len(job_configs), platform_config_input))
         if software_config:
             LOG.debug('A software config has also been specified: <%s>' 
                       % (software_config))
+        if ip_file:
+            LOG.debug('An ip file has been specified: <%s>' 
+                      % (ip_file))
+        if done_files_dir:
+            LOG.debug('A done_files directory has been specified: <%s>' 
+                      % (done_files_dir))
         
         # Create a deployment factory and get a deployer for the specified job
         # configuration
@@ -349,53 +363,94 @@ class LibhpcDeployerTool(object):
         # The one-off resource configuration processes are now complete and 
         # we can iterate over the job specifications running each job on 
         # the configured resource(s)
-        for job_config in job_configs:
-            LOG.debug('Processing job <%s> from list of job configs.' 
-                      % job_config.job_id)
-            
-            job_id = job_config.job_id
-        
-            if not job_config.working_dir:
-                job_config.working_dir = os.path.join(
-                        platform_config.storage_job_directory,
-                        job_id)
-        
-            # TODO: Is it correct to set the job config here or should it be 
-            # set on creation of the deployer perhaps, or just passed in to 
-            # the various job lifecycle stages? It cannot be set earlier since 
-            # it needs to be set per job.
-            # Prepare the job configuration
-            LOG.debug('Job configuration:\n%s\n' % job_config.get_info())
-            d.set_job_config(job_config)
-            LOG.debug('Job configuration for job <%s> set on deployer instance '
-                      '<%s> obtained successfully...' % (job_config.job_id, d))
-            
-            try:
-                d.transfer_files()
+        try:
+            for job_config in job_configs:
+                LOG.debug('Processing job <%s> from list of job configs.' 
+                          % job_config.job_id)
                 
-                d.run_job()
-                LOG.debug('Waiting for job to finish...')
-                (state, code) = d.wait_for_job_completion()
-                LOG.debug('Finished waiting...State: %s,   Exit code: %s' % (state, code))
-                
-                d.collect_output(job_config.output_file_destination)
-            except Exception as e:
-                LOG.debug('Error running the job: <%s>' % str(e))
-                if resource_info:
-                    LOG.debug('We have node info so there may be nodes to shut '
-                              'down...')
-                d.shutdown_resources()
+                job_id = job_config.job_id
             
-            LOG.debug('Completed job run process for job <%s>.' 
-                      % job_config.job_id)
+                if not job_config.working_dir:
+                    job_config.working_dir = os.path.join(
+                            platform_config.storage_job_directory,
+                            job_id)
+            
+                # TODO: Is it correct to set the job config here or should it be 
+                # set on creation of the deployer perhaps, or just passed in to 
+                # the various job lifecycle stages? It cannot be set earlier since 
+                # it needs to be set per job.
+                # Prepare the job configuration
+                LOG.debug('Job configuration:\n%s\n' % job_config.get_info())
+                d.set_job_config(job_config)
+                LOG.debug('Job configuration for job <%s> set on deployer instance '
+                          '<%s> obtained successfully...' % (job_config.job_id, d))
                 
-        d.shutdown_resources()
+                try:
+                    d.transfer_files()
+                    
+                    d.run_job()
+                    LOG.debug('Waiting for job to finish...')
+                    (state, code) = d.wait_for_job_completion()
+                    LOG.debug('Finished waiting...State: %s,   Exit code: %s' % (state, code))
+                    
+                    d.collect_output(job_config.output_file_destination)
+                except Exception as e:
+                    LOG.debug('Error running the job: <%s>' % str(e))
+                    if resource_info:
+                        LOG.debug('We have node info so there may still be '
+                                  'nodes to shut down...')
+                    # Resources now shut down in finally statement    
+                    #d.shutdown_resources()
+                
+                LOG.debug('Completed job run process for job <%s>.' 
+                          % job_config.job_id)
+                # If we have a done_files directory specified, write the 
+                # done file for this job
+                if done_files_dir:
+                    LOG.debug('Writing job done file for job <%s>' % 
+                              job_config.job_id)
+                    self._write_done_file(job_config.job_id, done_files_dir)
+                else:
+                    LOG.debug('Not writing a job done file, no done_file_dir '
+                              'specified.')
+        finally:
+            LOG.debug('Shutting down resources...')
+            d.shutdown_resources()
         
         # If an IP file was created, delete it
         if ip_file and os.path.exists(ip_file):
             os.remove(ip_file)
         
+        # Remove job done files
+        if done_files_dir:
+            self._remove_job_done_files(job_id_list, done_files_dir)
+        
         LOG.debug('Run job process complete for jobs <%s>' % job_id_list)
+        
+    def _write_done_file(self, job_id, done_files_dir):
+        if not os.path.exists(done_files_dir):
+            LOG.debug('Trying to write job done file for job <%s> but done_'
+                      'files directory <%s> does not exist.' 
+                      % (job_id, done_files_dir))
+            return
+        if not os.path.isdir(done_files_dir):
+            LOG.debug('Trying to write job done file for job <%s> but the '
+                      'specified done_files directory <%s> is a file and not a' 
+                      ' directory.' % (job_id, done_files_dir))
+            return
+            
+        done_file = os.path.join(done_files_dir, job_id+'_done')
+        open(done_file, 'w').close()
+        
+    def _remove_job_done_files(self, job_id_list, done_files_dir):
+        for job_id in job_id_list:
+            done_file_path = os.path.join(done_files_dir, job_id+'_done')
+            if os.path.exists(done_file_path):
+                LOG.debug('Removing job done file <%s>.' % done_file_path)
+                os.remove(done_file_path)
+            else:
+                LOG.debug('Job done file <%s> doesn\'t exist.' % done_file_path)
+                
             
 if __name__ == '__main__':
     libhpc_run_job()
