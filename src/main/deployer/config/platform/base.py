@@ -48,6 +48,7 @@ Created on 24 Jul 2015
 '''
 import os
 import logging
+import pwd
 import yaml
 from pkg_resources import resource_listdir, resource_string
 
@@ -123,8 +124,15 @@ class DeployerConfigManager(object):
     def get_platform_config_files(self):
         resource_config_files = [x for x in resource_listdir(
                         'deployer.config.platform','') if x.endswith('.yaml')]
+
+        # expanduser with ~ directly seems to fail when running python process under a different
+        # user and the USER and HOME environment variables are not correctly set. Using uid and
+        # getpwuid seems to operate correctly to get the username and home directory in 
+        # these cases.
+        uid = os.getuid()
+        username = pwd.getpwuid(os.getuid())[0]
         
-        platform_userdir = os.path.expanduser('~/.libhpc/config/platform')
+        platform_userdir = os.path.expanduser('~%s/.libhpc/config/platform' % username)
         config_files=[]
         if os.path.exists(platform_userdir):
             config_files = [os.path.join(platform_userdir,x) for x in 

@@ -55,6 +55,7 @@ with a number of different exit codes identifying different situations:
 '''
 import os
 import sys
+import pwd
 import logging
 import argparse
 
@@ -78,7 +79,15 @@ LIST_INFO_OPTIONS = ['platforms', 'software']
 
 def libhpc_run_job():
     # Begin by checking if the config file directories exist, if not create them
-    user_home = expanduser('~')
+    # expanduser with ~ directly seems to fail when running python process under a different
+    # user and the USER and HOME environment variables are not correctly set. Using uid and
+    # getpwuid seems to operate correctly to get the username and home directory in
+    # these cases.
+    uid = os.getuid()
+    username = pwd.getpwuid(os.getuid())[0]
+    LOG.debug('Looking up user home directory for uid <%s>, username <%s>.' % (uid, username))
+    user_home = expanduser('~' + username)
+    LOG.debug('Using user home directory <%s>.' % user_home)
     platform_config_dir = os.path.join(user_home, '.libhpc','config','platform')
     software_config_dir = os.path.join(user_home, '.libhpc','config','software')
     if not os.path.exists(platform_config_dir):

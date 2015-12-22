@@ -50,6 +50,7 @@ Base configuration for software package information (to allow deployment)
 '''
 import os
 import logging
+import pwd
 import yaml
 from pkg_resources import resource_listdir, resource_string
 
@@ -126,7 +127,14 @@ class SoftwareConfigManager(object):
         resource_config_files = [x for x in resource_listdir(
                         'deployer.config.software','') if x.endswith('.yaml')]
         
-        software_userdir = os.path.expanduser('~/.libhpc/config/software')
+        # expanduser with ~ directly seems to fail when running python process under a different
+        # user and the USER and HOME environment variables are not correctly set. Using uid and
+        # getpwuid seems to operate correctly to get the username and home directory in 
+        # these cases.
+        uid = os.getuid()
+        username = pwd.getpwuid(os.getuid())[0]
+
+        software_userdir = os.path.expanduser('~%s/.libhpc/config/software' % username)
         config_files = []
         if os.path.exists(software_userdir):
             config_files = [os.path.join(software_userdir,x) for x in 
