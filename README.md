@@ -412,7 +412,7 @@ The root of a job specification is the `libhpc_jobspec:` key. This key can take 
 
  * `input_files:`: A list of full paths to input files that must be provided as input to the job. These files will be staged to the remote platform.
 
- * `parameters:`: A list of strings consisting of the parameters to pass to the executable.
+ * `args:`: A list of strings consisting of the arguments to pass to the executable.
 
  * `stdout:`: Filename to write the job's standard output to. This file will be created in the job directory on the remote platform and returned as part of the output data.
 
@@ -436,7 +436,7 @@ Example of a job specification to run the command 'echo "Hello World!"':
 libhpc_jobspec:
     num_processes: 1
     executable: /bin/echo
-    parameters:
+    args:
       - "Hello World!"
     stdout: std.out
     stderr: std.err
@@ -452,7 +452,7 @@ libhpc_jobspec:
     processes_per_node: 8
     input_files: 
         - /home/user/input.data
-    parameters:
+    args:
         - -o output.data
     executable: /usr/bin/fileconvert
     stdout: std.out
