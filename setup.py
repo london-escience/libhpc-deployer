@@ -4,10 +4,10 @@ from os.path import expanduser
 
 setup(
     name = "libhpc_deployer",
-    version = "0.2",
+    version = "0.3",
     package_dir={'':'src/main'},
     packages=['deployer','deployer.config','deployer.config.platform',
-              'deployer.config.software'],
+              'deployer.config.software','deployer.core','deployer.plugins'],
     package_data={'':['*.yaml']},
     dependency_links=['git+https://github.com/jcohen02/saga-python#egg=saga-python',
                       'git+https://github.com/saga-project/radical.utils#egg=radical.utils'],

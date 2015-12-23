@@ -58,10 +58,10 @@ from math import ceil
 
 from deployer.config.software.base import SoftwareConfigManager,\
     SoftwareConfigFile
-from deployer.deployment_interface import JobDeploymentBase
-from deployer.exceptions import ResourceInitialisationError, JobError,\
+from deployer.core.deployment_interface import JobDeploymentBase
+from deployer.core.exceptions import ResourceInitialisationError, JobError,\
     InvalidCredentialsError
-from deployer.utils import generate_instance_id
+from deployer.core.utils import generate_instance_id
 
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider

@@ -52,8 +52,8 @@ by the deployer library.
 import os
 import logging
 import yaml
-from deployer.utils import generate_job_id
-from deployer.exceptions import JobConfigurationError
+from deployer.core.utils import generate_job_id
+from deployer.core.exceptions import JobConfigurationError
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG,

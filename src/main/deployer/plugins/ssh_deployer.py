@@ -53,8 +53,8 @@ import logging
 import os
 import saga.job
 
-from deployer.deployment_interface import JobDeploymentBase
-from deployer.exceptions import JobError, ConnectionError, DirectoryExistsError,\
+from deployer.core.deployment_interface import JobDeploymentBase
+from deployer.core.exceptions import JobError, ConnectionError, DirectoryExistsError,\
     StorageDirectoryNotFoundError
 
 from saga.filesystem import Directory, File, RECURSIVE

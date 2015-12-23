@@ -68,9 +68,9 @@ from libcloud.security import VERIFY_SSL_CERT
 
 from deployer.config.software.base import SoftwareConfigManager,\
     SoftwareConfigFile
-from deployer.deployment_interface import JobDeploymentBase
-from deployer.exceptions import ResourceInitialisationError, JobError
-from deployer.utils import generate_instance_id
+from deployer.core.deployment_interface import JobDeploymentBase
+from deployer.core.exceptions import ResourceInitialisationError, JobError
+from deployer.core.utils import generate_instance_id
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG,

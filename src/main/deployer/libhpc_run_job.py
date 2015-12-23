@@ -62,12 +62,12 @@ import argparse
 from deployer.config.platform.base import DeployerConfigManager, PlatformConfig
 from deployer.config.software.base import SoftwareConfigManager
 from deployer.config.job import JobConfiguration
-from deployer.exceptions import JobConfigurationError, ConnectionError,\
+from deployer.core.exceptions import JobConfigurationError, ConnectionError,\
     StorageDirectoryNotFoundError, DirectoryExistsError
-from deployer.deployment_factory import JobDeploymentFactory
+from deployer.core.deployment_factory import JobDeploymentFactory
 from os.path import expanduser
-from deployer.openstack_ec2_deployer import JobDeploymentEC2Openstack
-from deployer.ec2_deployer import JobDeploymentEC2
+from deployer.plugins.openstack_ec2_deployer import JobDeploymentEC2Openstack
+from deployer.plugins.ec2_deployer import JobDeploymentEC2
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG,

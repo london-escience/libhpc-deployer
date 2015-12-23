@@ -60,12 +60,12 @@ logging.basicConfig(level=logging.DEBUG,
 logging.getLogger(__name__).setLevel(logging.DEBUG)
 
 DEPLOYER_CLASSES = {
-    'PBS_PRO': ('deployer.pbs_deployer', 'JobDeploymentPBS'),
-    'OPENSTACK': ('deployer.openstack_deployer', 'JobDeploymentOpenstack'),
-    'OPENSTACK_EC2': ('deployer.openstack_ec2_deployer', 
+    'PBS_PRO': ('deployer.plugins.pbs_deployer', 'JobDeploymentPBS'),
+    'OPENSTACK': ('deployer.plugins.openstack_deployer', 'JobDeploymentOpenstack'),
+    'OPENSTACK_EC2': ('deployer.plugins.openstack_ec2_deployer', 
                       'JobDeploymentEC2Openstack'),
-    'EC2': ('deployer.ec2_deployer', 'JobDeploymentEC2'),
-    'SSH_FORK': ('deployer.ssh_deployer', 'JobDeploymentSSH'),
+    'EC2': ('deployer.plugins.ec2_deployer', 'JobDeploymentEC2'),
+    'SSH_FORK': ('deployer.plugins.ssh_deployer', 'JobDeploymentSSH'),
 }
 
 class JobDeploymentFactory(object):

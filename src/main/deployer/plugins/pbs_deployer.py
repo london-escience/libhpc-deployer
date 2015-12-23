@@ -49,8 +49,8 @@ Created on 31 Jul 2015
 import os
 import logging
 
-from deployer.deployment_interface import JobDeploymentBase
-from deployer.exceptions import JobError
+from deployer.core.deployment_interface import JobDeploymentBase
+from deployer.core.exceptions import JobError
 
 from saga.filesystem import Directory, File
 import saga.job
