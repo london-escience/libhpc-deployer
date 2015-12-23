@@ -52,6 +52,9 @@ Exceptions used in the deployer library
 class DeployerError(Exception):
     pass
 
+class InvalidCredentialsError(DeployerError):
+    pass
+
 class ResourceInitialisationError(DeployerError):
     pass
 
@@ -59,4 +62,13 @@ class JobError(DeployerError):
     pass
 
 class JobConfigurationError(DeployerError):
+    pass
+
+class ConnectionError(DeployerError):
+    pass
+
+class StorageDirectoryNotFoundError(DeployerError):
+    pass
+
+class DirectoryExistsError(DeployerError):
     pass

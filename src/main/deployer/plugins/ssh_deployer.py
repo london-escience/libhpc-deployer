@@ -53,8 +53,9 @@ import logging
 import os
 import saga.job
 
-from deployer.deployment_interface import JobDeploymentBase
-from deployer.exceptions import JobError
+from deployer.core.deployment_interface import JobDeploymentBase
+from deployer.core.exceptions import JobError, ConnectionError, DirectoryExistsError,\
+    StorageDirectoryNotFoundError
 
 from saga.filesystem import Directory, File, RECURSIVE
 
@@ -125,10 +126,14 @@ class JobDeploymentSSH(JobDeploymentBase):
             directory = Directory('sftp://%s:%s%s' % (self.host, self.port, 
                                   job_dir), session=self.session)
         except saga.BadParameter as e:
-            LOG.error('The specified job directory does not exist on resource '
-                      '<%s> (%s).' % (self.host, str(e)))
-            raise JobError('The specified job directory does not exist '
-                           'on resource <%s> (%s)' % (self.host, str(e)))
+            LOG.error('Error setting up connection to resource directory.')
+            if 'connection refused' in str(e).lower():
+                raise ConnectionError('Unable to connect to remote resource '
+                                      'to set up connection to directory.')
+                   
+            raise StorageDirectoryNotFoundError('The specified job data base '
+                    'directory does not exist on resource <%s> (%s)'
+                    % (self.host, str(e)))
         try:
             # directory.make_dir() does not return a handle to the new directory
             # so need to create the directory URL manually.
@@ -137,12 +142,20 @@ class JobDeploymentSSH(JobDeploymentBase):
         except saga.NoSuccess as e:
             LOG.error('The specified job data directory already exists on '
                       'resource <%s> (%s).' % (self.host, str(e)))
-            raise JobError('The specified job directory already exists on '
-                           'on resource <%s> (%s)' % (self.host, str(e)))
+            raise DirectoryExistsError('The specified job directory already '
+                           'exists on resource <%s> (%s)' % (self.host, str(e)))
         
         # Now upload the file(s) to the job data directory
         # and create an input file list containing the resulting locations
         # of the files.
+        # There are some cases where jobs may not have input files (they may, 
+        # for example pull the input files from a remote location as part of 
+        # the job process) so we first check whether there are any input files
+        # to process, if not, then return from this function
+        if not self.job_config.input_files:
+            LOG.debug('There are no input files to transfer for this job...')
+            return
+        
         self.transferred_input_files = []
         for f in self.job_config.input_files:
             try:

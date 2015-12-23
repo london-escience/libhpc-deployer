@@ -41,36 +41,45 @@
 # 
 #  -----------------------------------------------------------------------------
 '''
-Command line tool to run one or more jobs on the specified platform. Multiple
+Command line tool to run one or more jobs on the specified platform. 
+This tool provides the command line interface to the deployer. Multiple
 jobs can be specified by providing a list of job specifications to the -j 
 parameter.
 
 This command can exit can exit with the following codes:
 
- 0 - Job(s) completed successfully
- 2 - Job specification files missing - one or more of the specified job spec 
-     files were not found - no jobs run.
- 3 - A job specification file was found but could not be parsed successfully
- 4 - Node_type, number of processes or processes per node values don't match 
-     for one or more of the jobs specified in the list of job specifications.
- 5 - Software deployment error. An error has occurred deploying the specified 
-     software on the remote platform.
+   0 - Job(s) completed successfully
+   2 - Job specification files missing - one or more of the specified job spec 
+       files were not found - no jobs run.
+   3 - A job specification file was found but could not be parsed successfully
+   4 - Node_type, number of processes or processes per node values don't match 
+       for one or more of the jobs specified in the list of job specifications.
+   5 - Software deployment error. An error has occurred deploying the specified 
+       software on the remote platform.
+  10 - Connection error - unable to connect to remote resource via SSH
+  11 - Job storage directory not found error - the base job storage directory 
+       is not present on the remote platform.
+  12 - Job directory already exists error - A directory for the uniquely named 
+       job, that is about to be run, already exists.  
+ 100 - Job error - the job started but failed for some reason 
  
 See individual platform deployer implementations for additional exit codes.
-
+ 
 '''
 import os
+import pwd
 import logging
 import argparse
 
 from deployer.config.platform.base import DeployerConfigManager, PlatformConfig
 from deployer.config.software.base import SoftwareConfigManager
 from deployer.config.job import JobConfiguration
-from deployer.exceptions import JobConfigurationError
-from deployer.deployment_factory import JobDeploymentFactory
+from deployer.core.exceptions import JobConfigurationError, ConnectionError,\
+    StorageDirectoryNotFoundError, DirectoryExistsError
+from deployer.core.deployment_factory import JobDeploymentFactory
 from os.path import expanduser
-from deployer.openstack_ec2_deployer import JobDeploymentEC2Openstack
-from deployer.ec2_deployer import JobDeploymentEC2
+from deployer.plugins.openstack_ec2_deployer import JobDeploymentEC2Openstack
+from deployer.plugins.ec2_deployer import JobDeploymentEC2
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG,
@@ -82,7 +91,15 @@ LIST_INFO_OPTIONS = ['platforms', 'software']
 
 def libhpc_run_job():
     # Begin by checking if the config file directories exist, if not create them
-    user_home = expanduser('~')
+    # expanduser with ~ directly seems to fail when running python process under a different
+    # user and the USER and HOME environment variables are not correctly set. Using uid and
+    # getpwuid seems to operate correctly to get the username and home directory in
+    # these cases.
+    uid = os.getuid()
+    username = pwd.getpwuid(os.getuid())[0]
+    LOG.debug('Looking up user home directory for uid <%s>, username <%s>.' % (uid, username))
+    user_home = expanduser('~' + username)
+    LOG.debug('Using user home directory <%s>.' % user_home)
     platform_config_dir = os.path.join(user_home, '.libhpc','config','platform')
     software_config_dir = os.path.join(user_home, '.libhpc','config','software')
     if not os.path.exists(platform_config_dir):
@@ -329,41 +346,46 @@ class LibhpcDeployerTool(object):
                   % (job_id_list, platform_config.platform_name))
 
         
-        # Now that the initial configuration has been done, we can run the job
-        # Begin by initialising the resources...
-        # Since we mandate that all node_type, num_processes and 
-        # processes_per_node values must be the same when multiple job specs are 
-        # submitted, we use the values from job_configs[0] for resource init.
-        resource_info = d.initialise_resources(node_type=job_configs[0].node_type,
-                                               num_processes=job_configs[0].num_processes,
-                                               processes_per_node=job_configs[0].processes_per_node,
-                                               job_id=job_configs[0].job_id,
-                                               software_config=software_config)
         
-        # If an ip file was specified, write the public IPs of the resources
-        # to this file. Currently only supports EC2-style cloud platforms
-        if ip_file and (isinstance(d, JobDeploymentEC2Openstack) or
-                        isinstance(d, JobDeploymentEC2)):
-            with open(ip_file, 'w') as f:
-                for node in resource_info:
-                    f.write(node[0].public_ips[0] + '\n')
                 
+                
+        # We now undertake resource initialisation and we can then iterate
+        # over the job specifications running each job on the configured resource(s)
         try:
+            # Now that the initial configuration has been done, we can run the job
+            # Begin by initialising the resources...
+            # Since we mandate that all node_type, num_processes and 
+            # processes_per_node values must be the same when multiple job specs are 
+            # submitted, we use the values from job_configs[0] for resource init.
+            resource_info = d.initialise_resources(node_type=job_configs[0].node_type,
+                                                   num_processes=job_configs[0].num_processes,
+                                                   processes_per_node=job_configs[0].processes_per_node,
+                                                   job_id=job_configs[0].job_id,
+                                                   software_config=software_config)
+        
+            # If an ip file was specified, write the public IPs of the resources
+            # to this file. Currently only supports EC2-style cloud platforms
+            if ip_file and (isinstance(d, JobDeploymentEC2Openstack) or
+                            isinstance(d, JobDeploymentEC2)):
+                with open(ip_file, 'w') as f:
+                    for node in resource_info:
+                        f.write(node[0].public_ips[0] + '\n')
+                
+            # TODO: Catch any exceptions generated during the software deployment
+            # process and exit with return code 5. Resources will be shutdown
+            # by the finally statement at the end of this try block.
             if software_config:
                 d.deploy_software(software_config)
             else:
                 d.deploy_software()
-        except Exception as e:
-            LOG.error('Error deploying software on remote platform: <%s>' 
-                      % str(e))
-            d.shutdown_resources()
-            exit(5)
+            
+                #LOG.error('Error deploying software on remote platform: <%s>' 
+                #          % str(e))
+                #d.shutdown_resources()
+                #exit(5)
                 
-                
-        # The one-off resource configuration processes are now complete and 
-        # we can iterate over the job specifications running each job on 
-        # the configured resource(s)
-        try:
+            # Now that initialisation is complete we can iterate over each
+            # of the jobs.
             for job_config in job_configs:
                 LOG.debug('Processing job <%s> from list of job configs.' 
                           % job_config.job_id)
@@ -394,16 +416,23 @@ class LibhpcDeployerTool(object):
                     LOG.debug('Finished waiting...State: %s,   Exit code: %s' % (state, code))
                     
                     d.collect_output(job_config.output_file_destination)
+                except ConnectionError as e:
+                    LOG.error('Connection error when trying to run job: <%s>' % str(e))
+                    exit(10)
+                except StorageDirectoryNotFoundError as e:
+                    LOG.error('The job storage directory specified for the remote '
+                              'compute platform does not exist.')
+                    exit(11)
+                except DirectoryExistsError as e:
+                    LOG.error('The job directory for this job already exists.')
+                    exit(12)  
                 except Exception as e:
-                    LOG.debug('Error running the job: <%s>' % str(e))
-                    if resource_info:
-                        LOG.debug('We have node info so there may still be '
-                                  'nodes to shut down...')
-                    # Resources now shut down in finally statement    
-                    #d.shutdown_resources()
+                    LOG.debug('Unknown error running this job: <%s>. ' 
+                              'Continuing with next job in list.' % str(e))
                 
                 LOG.debug('Completed job run process for job <%s>.' 
                           % job_config.job_id)
+                
                 # If we have a done_files directory specified, write the 
                 # done file for this job
                 if done_files_dir:

@@ -91,9 +91,15 @@ class EC2PlatformConfig(PlatformConfig):
     def access_key(self):
         return self._access_key
     
+    # TODO: Having issues with cloud library returning unexpected errors if 
+    # access/secret key are set here to None. For now, ensuring that if there 
+    # an attempt to set these values to None, they are set to empty string.
     @access_key.setter
     def access_key(self, value):
-        self._access_key = value
+        if not value:
+            self._access_key = ''
+        else:
+            self._access_key = value
     
     @property
     def secret_key(self):
@@ -101,7 +107,10 @@ class EC2PlatformConfig(PlatformConfig):
     
     @secret_key.setter
     def secret_key(self, value):
-        self._secret_key = value
+        if not value:
+            self._secret_key = ''
+        else:
+            self._secret_key = value
 
     @property
     def user_key_name(self):

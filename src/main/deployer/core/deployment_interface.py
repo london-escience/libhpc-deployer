@@ -51,7 +51,7 @@ import logging
 import urlparse
 import saga
 from saga.job import Description, Service
-from deployer.exceptions import ResourceInitialisationError
+from deployer.core.exceptions import ResourceInitialisationError
 from saga.filesystem import File
 
 

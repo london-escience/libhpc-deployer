@@ -46,30 +46,31 @@ Created on 31 Jul 2015
 
 @author: jcohen02
 
-OpenStack EC2 deployer. Uses the Eucalpytus provider to provide access
-to the EC2 interface of an OpenStack deployment.
+Amazon EC2 deployer that can handle deployment of jobs to pre-configured or 
+un-configured resources.
 '''
 import logging
 import os
-import socket
 import tempfile
 import time
+import socket
 from math import ceil
+
+import saga
+from saga.job import Description, Service
+from saga.utils.pty_shell import PTYShell
+from saga.filesystem import Directory, File
+from saga.exceptions import NoSuccess, BadParameter, AuthenticationFailed
+
+from libcloud.compute.providers import get_driver
+from libcloud.compute.types import Provider, NodeState
+from libcloud.security import VERIFY_SSL_CERT
 
 from deployer.config.software.base import SoftwareConfigManager,\
     SoftwareConfigFile
-from deployer.deployment_interface import JobDeploymentBase
-from deployer.exceptions import ResourceInitialisationError, JobError
-from deployer.utils import generate_instance_id
-
-from libcloud.compute.providers import get_driver
-from libcloud.compute.types import Provider
-from libcloud.security import VERIFY_SSL_CERT
-
-import saga.job
-from saga.exceptions import NoSuccess, BadParameter, AuthenticationFailed
-from saga.filesystem import Directory, File
-from saga.utils.pty_shell import PTYShell
+from deployer.core.deployment_interface import JobDeploymentBase
+from deployer.core.exceptions import ResourceInitialisationError, JobError
+from deployer.core.utils import generate_instance_id
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG,
@@ -77,42 +78,53 @@ logging.basicConfig(level=logging.DEBUG,
                     datefmt='%m-%d %H:%M')
 logging.getLogger(__name__).setLevel(logging.DEBUG)
 
-class JobDeploymentEC2Openstack(JobDeploymentBase):
+class JobDeploymentEC2(JobDeploymentBase):
     '''
     This is a deployer implementation for deploying code and running jobs on 
-    OpenStack cloud resources via the EC2 interface. It uses the Eucalyptus 
-    provider within libcloud to support this functionality.
+    Amazon EC2 resources.
     
     The workflow of deployment and job execution used here covers all the 
     stages set out in the base deployer class so all functions from the base 
     class are overloaded.  
     '''
-    
-    # The libcloud driver for OpenStack, configured in the constructor
+    # The libcloud driver for EC2, configured in the constructor
     driver = None
+    
+    REGION_MAPPINGS = {'ap-northeast-1':Provider.EC2_AP_NORTHEAST,
+                       'ap-southeast-1':Provider.EC2_AP_SOUTHEAST,
+                       'ap-southeast-2':Provider.EC2_AP_SOUTHEAST2,
+                       'eu-west-1':Provider.EC2_EU_WEST,
+                       'sa-east-1':Provider.EC2_SA_EAST,
+                       'us-east-1':Provider.EC2_US_EAST,
+                       'us-west-1':Provider.EC2_US_WEST,
+                       'us-west-2':Provider.EC2_US_WEST_OREGON}
 
     def __init__(self, platform_config):
         '''
         Constructor
         '''
-        super(JobDeploymentEC2Openstack, self).__init__(platform_config)
+        super(JobDeploymentEC2, self).__init__(platform_config)
         
         # Here we set up Apache libcloud with the necessary config obtained
         # from the job config
         # Prepare the necessary config information from the job config object.
-        host = self.platform_config.platform_service_host
-        port = self.platform_config.platform_service_port
+
+        #host = self.platform_config.platform_service_host
+        #port = self.platform_config.platform_service_port
         
         access_key = self.platform_config.access_key
         secret_key = self.platform_config.secret_key
-        #region = self.platform_config.service_region
+
+        region = self.platform_config.service_region
         
         VERIFY_SSL_CERT = False
 
-        EUCA = get_driver(Provider.EUCALYPTUS) 
-        self.driver = EUCA(access_key, secret=secret_key, secure=False, 
-                          host=host, port=port, path='/services/Cloud')
+        if region in self.REGION_MAPPINGS.keys():
+            EC2 = get_driver(self.REGION_MAPPINGS[region])
+        else:
+            EC2 = get_driver(Provider.EC2_EU_WEST)        
         
+        self.driver = EC2(access_key, secret_key, secure=True)
         
         # SAGA Session is pre-created by superclass
         # Prepare the job security context and store it - this will allow
@@ -123,7 +135,7 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         self.job_ctx.user_key = self.platform_config.user_key_file
         self.admin_ctx = None
         LOG.debug('Set up security context for job account...')
-                
+
     def initialise_resources(self, prefer_unconfigured=True, 
                              num_processes=1, processes_per_node=1,
                              node_type='m1.small', job_id=None, retries=3,
@@ -192,11 +204,7 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         img = None
         try:
             #img = self.driver.get_image(image_id)
-            images = self.driver.list_images()
-            for image in images:
-                if image.id == image_id:
-                    img = image
-                    break
+            img = self.driver.list_images(ex_image_ids=[image_id])[0]
             if img == None:
                 raise ResourceInitialisationError('The specified image <%s> '
                                                   'could not be found' % image_id)
@@ -205,11 +213,11 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
             raise ResourceInitialisationError('ERROR contacting the remote '
                              'cloud platform. Do you have an active network '
                              'connection? - <%s>' % str(e))
-        except:
+        except Exception as e:
             img = None
-            raise ResourceInitialisationError('ERROR: The specified image <%s> '
-                             'is not present on the target platform, unable '
-                             'to start resources.' % image_id)
+            raise ResourceInitialisationError('ERROR: An error has occurred '
+                             'finding the specified image <%s>. Unable to '
+                             'start resources.' % image_id)
         
         sizes = self.driver.list_sizes()
         size = next((s for s in sizes if s.id == node_type), None)
@@ -227,10 +235,11 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
             keypair_name = self.platform_config.user_key_name
         
         # Get the number of resources from the job configuration
-        # TODO: Fix this to obtain number of cores per node from the cloud
-        # cloud platform. For now use the specified processes_per_node in the 
-        # job specification. 
+        # TODO: For now use num_cores to give us a number of resources, need to 
+        # fix this to work out how many cores per node for the specified node
+        # type and then work out how many instances to start.
         cores_per_node = processes_per_node
+        # TODO: Get number of cores for a node preferably from the libcloud API
         #cores_per_node = self.RESOURCE_TYPE_CORES[node_type]
         #if cores_per_node < processes_per_node:
         #    LOG.debug('A processes_per_node value <%s> greater than the number '
@@ -270,13 +279,6 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         # trying to list that directory. If an exception is thrown, we assume
         # that the nodes are not yet available.
         
-        # TODO: Need to replace this wait with a reliable check as to whether 
-        # the server is up and running. Looks like, for now, this will need to 
-        # use Paramiko while awaiting updates on saga-python.
-        #LOG.debug('Waiting 60 seconds for node to boot...')
-        #time.sleep(60)
-        # Replaced 60 second wait with check using Paramiko to see if 
-        # resource is accessible...
         LOG.debug('Checking node is available...')
         
         nodes_to_check = []
@@ -448,7 +450,15 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
                         LOG.debug('Software deployment: About to write data to '
                                   'remote file <%s> on node <%s>'
                                   % (cmd.filename, shell_connection.url)) 
-                        shell_connection.write_to_remote(cmd.data, cmd.filename)
+                        # Write the file to the home directory of the current 
+                        # user account to avoid any problems with ownership of 
+                        # the target location
+                        shell_connection.write_to_remote(cmd.data, 
+                                            os.path.basename(cmd.filename))
+                        # Now use sudo to move the file to the target location
+                        local_cmd = ('sudo mv ~/%s %s' 
+                               % (os.path.basename(cmd.filename), cmd.filename))
+                        shell_connection.run_sync(local_cmd)
                     else:
                         LOG.debug('Software deployment: About to run command '
                                   '<%s> on resource <%s>...' 
@@ -553,20 +563,7 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         input_files = getattr(self, 'transferred_input_files', [])
         job_arguments += input_files
         
-        # Check if we have a JOB_ID variable in the arguments or input files.
-        # If so, replace this variable with the actual job ID.
-        job_arguments_tmp = job_arguments
-        job_arguments = []
-        for item in job_arguments_tmp:
-            # Can't do a replace on items that are not string types!
-            if isinstance(item, basestring):
-                job_arguments.append(item.replace('$JOB_ID', self.job_config.job_id))
-            else:
-                job_arguments.append(item)
-        
-        LOG.debug('Modified job arguments: %s' % job_arguments)
-        
-        jd = saga.job.Description()
+        jd = Description()
         jd.environment = getattr(self.job_config, 'environment', {})
         if self.job_config.num_processes > 1:
             jd.executable  = ('mpirun -np %s -machinefile /tmp/machinefile'
@@ -590,7 +587,7 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         if not jd.error:
             jd.error = 'std.err'
         
-        self.svc = saga.job.Service('ssh://%s/' % self.running_nodes[0][0].public_ips[0], session=self.session)
+        self.svc = Service('ssh://%s/' % self.running_nodes[0][0].public_ips[0], session=self.session)
         self.job = self.svc.create_job(jd)
         self.job.run()
         
@@ -627,6 +624,10 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         
     def shutdown_resources(self):
         JobDeploymentBase.shutdown_resources(self)
+        
+        # Number of seconds between chceking for shutdown of resources.
+        SHUTDOWN_POLL_DELAY = 4
+        
         # Here we terminate the running resources for this job and 
         # wait until they have been shut down.
         res_ids = [node.id for node in self.nodes]
@@ -637,8 +638,20 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
             self.driver.destroy_node(node)
         
         while res_ids:
-            nodes_to_wait_for = self.driver.list_nodes(res_ids)
-            still_running = [node.id for node in nodes_to_wait_for]
+            # TODO: Find a better approach to remove nodes that have vanished 
+            # from the system, at present we need to manually go through each
+            # node to identify individual nodes that are no longer accessible.
+            try:
+                nodes_to_wait_for = self._get_node_list(res_ids)
+            except Exception as e:
+                LOG.debug('Exception <%s> getting node list, getting node info'
+                           ' individually.' % str(e))
+                nodes_to_wait_for = self._get_node_list(res_ids, manual=True)
+            still_running = []
+            for node_info in nodes_to_wait_for:
+                if node_info.state != NodeState.TERMINATED:
+                    still_running.append(node_info.id)
+            
             new_res_ids = []
             # Now go through res_ids and delete the nodes that don't appear
             # in still_running.
@@ -651,7 +664,7 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
             if res_ids:
                 LOG.debug('Still waiting for termination of resources %s...'
                           % res_ids)
-                time.sleep(2)
+                time.sleep(SHUTDOWN_POLL_DELAY)
         
         LOG.debug('All resources terminated.')
 
@@ -664,8 +677,7 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
     def _wait_for_node_accessbility_saga(self, node_ip_list, user_id, key_file, 
                                     port=22, retries=3):
         # Using saga to check if remote resources are accessible
-        #retries = 3
-        retries = 5
+        retries = 3
         attempts_made = 0
         connection_successful = False
         
@@ -677,8 +689,8 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
             self.session.add_context(self.job_ctx)
 
         # TODO: Shouldn't try other security contexts until we've tried one 
-        # context with all nodes, at present the connection fails because we 
-        # switch contexts before checking each node...
+        # context with all nodes, at present connection fails because we 
+        # switch contexts before checking each node?
         while attempts_made < retries and not connection_successful:
             nodes_ok = []
             for ip in node_ip_list:
@@ -709,6 +721,16 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
                     LOG.debug('Authentication failure when making connection '
                               'to resource <%s>: %s\nTrying next security '
                               'context...' % (ip, str(e)))
+#                     try:
+#                         next_ctx = contexts.pop()
+#                         self.session = saga.Session(default = False)
+#                         self.session.add_context(next_ctx)
+#                         attempts_made -=1
+#                     except IndexError as e:
+#                         LOG.debug('No more security contexts available: %s '
+#                                   % str(e))
+#                         raise NoSuccess('No valid security context for '
+#                                         'connection to resource <%s>.' % ip)
                     raise NoSuccess('No valid security context for '
                                         'connection to resource <%s>.' % ip)
             
@@ -827,35 +849,80 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
             home_dir = Directory(pty_conn.url + user_home, session=pty_conn.session)
         except BadParameter:
             # Assume home directory doesn't exist and create it here.
-            rootdir = Directory(pty_conn.url + '/', session=pty_conn.session)
-            rootdir.make_dir(user_home)
+            cmd = 'mkdir -p %s' % user_home
+            if pty_conn.session.contexts[0].user_id != 'root':
+                cmd = 'sudo ' + cmd
+            res, out, err = pty_conn.run_sync(cmd)
+            LOG.debug('Make directory <%s> result <%s>, out <%s>, err <%s>'
+                      % (res, out, err))
+            if res != 0:
+                raise JobError('Unable to create the user home directory '
+                               '<%s>...' % user_home)
             home_dir = Directory(pty_conn.url + user_home, session=pty_conn.session)
-            
-        try:
-            home_dir.make_dir(os.path.join(user_home,'.ssh'))
-        except saga.NoSuccess as e:
-            if 'exists' in str(e):
-                LOG.debug('Directory <%s> already exists...' 
-                          % os.path.join(user_home,'.ssh'))
-            else:
-                raise JobError('Unable to create the SSH directory in user '
-                               'home <%s>...' % os.path.join(user_home,'.ssh'))
         
-        try:
-            home_dir.make_dir(platform_config.storage_job_directory)
-        except saga.NoSuccess as e:
-            if 'exists' in str(e):
-                LOG.debug('Job data directory <%s> already exists...' 
-                          % platform_config.storage_job_directory)
-            else:
-                raise JobError('Unable to create platform data directory '
-                               '<%s>.' % platform_config.storage_job_directory)
+#         try:
+#             home_dir.make_dir(os.path.join(user_home,'.ssh'))
+#         except saga.NoSuccess as e:
+#             if 'exists' in str(e):
+#                 LOG.debug('Directory <%s> already exists...' 
+#                           % os.path.join(user_home,'.ssh'))
+#             else:
+#                 raise JobError('Unable to create the SSH directory in user '
+#                                'home <%s>...' % os.path.join(user_home,'.ssh'))
+        
+        cmd = 'mkdir -p %s' % os.path.join(user_home,'.ssh')
+        if pty_conn.session.contexts[0].user_id != 'root':
+            cmd = 'sudo ' + cmd
+        res, out, err = pty_conn.run_sync(cmd)
+        LOG.debug('Make directory <%s> result <%s>, out <%s>, err <%s>'
+                  % (os.path.join(user_home,'.ssh'), res, out, err))
+        if res != 0:
+            raise JobError('Unable to create the SSH directory in user '
+                           'home <%s>...' % os.path.join(user_home,'.ssh'))
+        
+        cmd = 'mkdir -p %s' % platform_config.storage_job_directory
+        if pty_conn.session.contexts[0].user_id != 'root':
+            cmd = 'sudo ' + cmd
+        res, out, err = pty_conn.run_sync(cmd)
+        LOG.debug('Make directory <%s> result <%s>, out <%s>, err <%s>'
+                  % (platform_config.storage_job_directory, res, out, err))
+        if res != 0:
+            raise JobError('Unable to create platform data directory '
+                           '<%s>.' % platform_config.storage_job_directory)
+        
+        # TODO: Need a much nicer way of handling this. Since 
+        # write_to_remote might upload the file as a non-root user into a 
+        # directory created with admin rights and hence owned by root, if the  
+        # user used by pty_conn is not root, we temporarily change ownership of 
+        # the home directory to the current user, write the public key and 
+        # then apply the chown of all files to the libhpc user...
+        if pty_conn.session.contexts[0].user_id != 'root':
+            current_user = pty_conn.session.contexts[0].user_id 
+            cmd = 'sudo chown -R %s:%s %s' % (current_user,current_user,user_home)
+            pty_conn.run_sync(cmd)
         
         # Write the public key to the authorized keys file on the remote node
         pty_conn.write_to_remote(public_key, 
                                  os.path.join(user_home,'.ssh','authorized_keys'))
         
-        # Change ownership of all created directories/files to the job user
-        pty_conn.run_sync('chown -R %s:%s %s' % (user_id,user_id,user_home))
-                
-                        
+        # Change ownership of the authorised keys file just created...
+        cmd = 'chown -R %s:%s %s' % (user_id,user_id,user_home)
+        if pty_conn.session.contexts[0].user_id != 'root':
+            cmd = 'sudo ' + cmd
+        pty_conn.run_sync(cmd)
+
+    def _get_node_list(self, res_ids, manual=False):
+        if not manual:
+            return self.driver.list_nodes(res_ids) 
+        else:
+            node_list = []
+            for res_id in res_ids:
+                try:
+                    node_info = self.driver.list_nodes(res_id)
+                    node_list.append(node_info)
+                except Exception as e:
+                    LOG.debug('Error getting node info for node <%s>,'
+                              'assuming this node has terminated...' % res_id)
+            return node_list
+                    
+                    
