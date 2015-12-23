@@ -292,24 +292,30 @@ class LibhpcDeployerTool(object):
         LOG.debug('Deployer instance <%s> obtained and configured '
                   'successfully...' % d)
         
-        # Now that the initial configuration has been done, we can run the job
-        # Begin by initialising the resources...
         
-        resource_info = d.initialise_resources(node_type=job_config.node_type,
-                                               num_processes=job_config.num_processes,
-                                               processes_per_node=job_config.processes_per_node,
-                                               job_id=job_config.job_id,
-                                               software_config=software_config)
-        
-        # If an ip file was specified, write the public IPs of the resources
-        # to this file. Currently only supports EC2-style cloud platforms
-        if ip_file and (isinstance(d, JobDeploymentEC2Openstack) or
-                        isinstance(d, JobDeploymentEC2)):
-            with open(ip_file, 'w') as f:
-                for node in resource_info:
-                    f.write(node[0].public_ips[0] + '\n')
                 
         try:
+            # Now that the initial configuration has been done, we can run the job
+            # Begin by initialising the resources...
+            
+            # This call can generate an exception when waiting for resources
+            # to become available or accessible, this will leave resources 
+            # running when the call returns so this needs to go within the  
+            # try/finally block.
+            resource_info = d.initialise_resources(node_type=job_config.node_type,
+                                                   num_processes=job_config.num_processes,
+                                                   processes_per_node=job_config.processes_per_node,
+                                                   job_id=job_config.job_id,
+                                                   software_config=software_config)
+            
+            # If an ip file was specified, write the public IPs of the resources
+            # to this file. Currently only supports EC2-style cloud platforms
+            if ip_file and (isinstance(d, JobDeploymentEC2Openstack) or
+                            isinstance(d, JobDeploymentEC2)):
+                with open(ip_file, 'w') as f:
+                    for node in resource_info:
+                        f.write(node[0].public_ips[0] + '\n')
+                        
             if software_config:
                 d.deploy_software(software_config)
             else:

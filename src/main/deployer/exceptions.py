@@ -52,6 +52,9 @@ Exceptions used in the deployer library
 class DeployerError(Exception):
     pass
 
+class InvalidCredentialsError(DeployerError):
+    pass
+
 class ResourceInitialisationError(DeployerError):
     pass
 

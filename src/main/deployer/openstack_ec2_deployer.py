@@ -59,7 +59,8 @@ from math import ceil
 from deployer.config.software.base import SoftwareConfigManager,\
     SoftwareConfigFile
 from deployer.deployment_interface import JobDeploymentBase
-from deployer.exceptions import ResourceInitialisationError, JobError
+from deployer.exceptions import ResourceInitialisationError, JobError,\
+    InvalidCredentialsError
 from deployer.utils import generate_instance_id
 
 from libcloud.compute.providers import get_driver
@@ -113,6 +114,7 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         self.driver = EUCA(access_key, secret=secret_key, secure=False, 
                           host=host, port=port, path='/services/Cloud')
         
+        LOG.debug('The cloud driver instance is <%s>' % self.driver)
         
         # SAGA Session is pre-created by superclass
         # Prepare the job security context and store it - this will allow
@@ -205,9 +207,17 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
             raise ResourceInitialisationError('ERROR contacting the remote '
                              'cloud platform. Do you have an active network '
                              'connection? - <%s>' % str(e))
-        except:
+        except Exception as e:
+            LOG.debug('ERROR STRING: %s' % str(e))
             img = None
-            raise ResourceInitialisationError('ERROR: The specified image <%s> '
+            if str(e).startswith('Unauthorized:'):
+                raise InvalidCredentialsError('ERROR: Access to the cloud '
+                             'platform at <%s> was not authorised. Are your '
+                             'credentials correct?' % 
+                             (self.platform_config.platform_service_host + ':' 
+                              + str(self.platform_config.platform_service_port)))
+            else:
+                raise ResourceInitialisationError('ERROR: The specified image <%s> '
                              'is not present on the target platform, unable '
                              'to start resources.' % image_id)
         
@@ -215,8 +225,10 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         size = next((s for s in sizes if s.id == node_type), None)
         if not size:
             raise ResourceInitialisationError('ERROR: The specified resource '
-                             'size <%s> is not present on the target platform. '
-                             'Unable to start resources.' % node_type)
+                             'size (node_type) <%s> is not present on the '
+                             'target platform. Unable to start resources. Have '
+                             'you set the node_type parameter in your job spec?'
+                              % node_type)
         
         # Get the keypair name from the configuration
         # If we're using an unconfigured resource, we use the admin key pair
@@ -670,12 +682,16 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         return self._wait_for_node_accessbility_saga(*args, **kwargs)
 
     def _wait_for_node_accessbility_saga(self, node_ip_list, user_id, key_file, 
-                                    port=22, retries=3):
+                                    port=22, retries=3, pre_check_delay=10):
         # Using saga to check if remote resources are accessible
         #retries = 3
         retries = 5
         attempts_made = 0
         connection_successful = False
+        
+        LOG.debug('Waiting <%s> seconds to check for resource accessibility.'
+                  % (pre_check_delay))
+        time.sleep(pre_check_delay)
         
         # Create an empty session with no contexts
         self.session = saga.Session(default = False)
