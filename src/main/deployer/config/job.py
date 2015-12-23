@@ -66,16 +66,17 @@ class JobConfiguration(object):
     Job configuration class representing the complete configuration for a job. 
     '''
 
-    _job_id = None
-    _executable = None
-    _node_type = None
-    _input_files = []
-    _args = []
-    _num_processes = 1
-    _processes_per_node = 1
-    _working_dir = None
-    _stdout = None
-    _stderr = None
+    # To avoid class/instance variable confusion, moved these to __init__
+    #_job_id = None
+    #_executable = None
+    #_node_type = None
+    #_input_files = []
+    #_args = []
+    #_num_processes = 1
+    #_processes_per_node = 1
+    #_working_dir = None
+    #_stdout = None
+    #_stderr = None
     
     # Where to copy the output files to.
     _output_file_destination = None
@@ -85,8 +86,19 @@ class JobConfiguration(object):
 
     def __init__(self):
         '''
-        Create a job identifier for this configuration.
+        Initialise instance variables and create a job identifier for 
+        this configuration.
         '''
+        self._executable = None
+        self._node_type = None
+        self._input_files = []
+        self._args = []
+        self._num_processes = 1
+        self._processes_per_node = 1
+        self._working_dir = None
+        self._stdout = None
+        self._stderr = None
+        
         self._job_id = generate_job_id()
         LOG.debug('Generated a job ID for this job info <%s>...' % self._job_id)
         

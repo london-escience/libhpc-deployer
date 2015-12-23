@@ -318,9 +318,9 @@ class LibhpcDeployerTool(object):
         # At the same time we prepare a list of the job IDs for the jobs to be 
         # run
         job_id_list = []
-        node_type_check = job_configs[0].node_type
-        np_check = job_configs[0].num_processes
-        ppn_check = job_configs[0].processes_per_node
+        node_type_check = getattr(job_configs[0], 'node_type', None)
+        np_check = getattr(job_configs[0], 'num_processes', 1)
+        ppn_check = getattr(job_configs[0], 'processes_per_node', 1)
         for spec in job_configs:
             job_id_list.append(spec.job_id)
             if spec.node_type != node_type_check:

@@ -569,8 +569,11 @@ class JobDeploymentEC2Openstack(JobDeploymentBase):
         # resource management service to handle this?
         LOG.debug('Run job...')
         
-        job_arguments = getattr(self.job_config, 'args', [])
-        input_files = getattr(self, 'transferred_input_files', [])
+        # Wrap getattr calls in list() to ensure we get a copy of the list
+        # not the value stored in the job config. Otherwise we will modify
+        # the job config.
+        job_arguments = list(getattr(self.job_config, 'args', []))
+        input_files = list(getattr(self, 'transferred_input_files', []))
         job_arguments += input_files
         
         # Check if we have a JOB_ID variable in the arguments or input files.

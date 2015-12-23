@@ -183,8 +183,11 @@ class JobDeploymentSSH(JobDeploymentBase):
         # execution and handle compressing and returning the output files. 
         LOG.debug('SSH Deployer: Run job...')
         
-        job_arguments = getattr(self.job_config, 'args', [])
-        input_files = getattr(self, 'transferred_input_files', [])
+        # Wrap getattr calls in list() to ensure we get a copy of the list
+        # not the value stored in the job config. Otherwise we will modify
+        # the job config.
+        job_arguments = list(getattr(self.job_config, 'args', []))
+        input_files = list(getattr(self, 'transferred_input_files', []))
         job_arguments += input_files
         
         # Check if we have a JOB_ID variable in the arguments or input files.
@@ -199,6 +202,9 @@ class JobDeploymentSSH(JobDeploymentBase):
                 job_arguments.append(item)
         
         LOG.debug('Modified job arguments: %s' % job_arguments)
+        
+        LOG.debug('Working directory for job <%s> is <%s>.' 
+                  % (self.job_config.job_id, self.job_config.working_dir))
         
         jd = saga.job.Description()
         jd.environment = getattr(self.job_config, 'environment', {})
